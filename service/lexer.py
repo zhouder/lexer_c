@@ -13,14 +13,14 @@ class Lexer:
         self.pos = 0
         self.line = 1
         self.col = 1
-        # 预构建 OP/DL 的 Trie 以实现最长匹配
+        
         self.trie = Trie()
         for op in OPERATORS:
             self.trie.add(op, "OP")
         for dl in DELIMITERS:
             self.trie.add(dl, "DL")
 
-    # —— 位移与窥探 ——
+    #推进
     def _advance(self, s: str):
         for ch in s:
             if ch == "\n":
@@ -30,10 +30,12 @@ class Lexer:
                 self.col += 1
         self.pos += len(s)
 
+    # 提前看
     def _peek(self, k=1) -> str:
         return self.text[self.pos:self.pos+k]
+    
 
-    # —— 忽略：空白 / 注释 / 预处理行 ——
+    # 预处理
     def _skip_ws(self) -> bool:
         n = match_whitespace(self.text, self.pos)
         if n > 0:
@@ -62,17 +64,17 @@ class Lexer:
         return False
 
     def _skip_comments(self):
-        # 块注释 /* ... */
+        # 块注释
         if self._peek(2) == "/*":
             end = self.text.find("*/", self.pos + 2)
             if end == -1:
                 lex = self.text[self.pos:]
                 tok = Token(TokenType.ERROR, lex, self.line, self.col)
                 self._advance(lex)
-                return tok  # 未闭合，交给上层返回错误
+                return tok 
             self._advance(self.text[self.pos:end+2])
             return True
-        # 单行注释 // ...（兼容）
+        # 单行注释 
         if self._peek(2) == "//":
             j = self.text.find("\n", self.pos)
             if j == -1:
@@ -82,7 +84,7 @@ class Lexer:
             return True
         return False
 
-    # —— 字符串/字符（含未闭合错误） ——
+    # 字符串/字符 ——
     def _try_string_or_char(self):
         length, is_string, is_error = match_string_or_char(self.text, self.pos)
         if length == 0:
@@ -96,9 +98,8 @@ class Lexer:
         self._advance(lex)
         return tok
 
-    # —— 主接口：生成下一个 token ——
+    # 主接口
     def next_token(self) -> Token:
-        # 统一跳过：空白 / 注释 / 预处理行
         progressed = True
         while progressed:
             progressed = False
@@ -107,7 +108,7 @@ class Lexer:
             cm = self._skip_comments()
             if cm is True:
                 progressed = True
-            elif isinstance(cm, Token):   # 未闭合块注释 -> 错误
+            elif isinstance(cm, Token): 
                 return cm
             if self._skip_pp_line():
                 progressed = True
@@ -115,15 +116,15 @@ class Lexer:
         if self.pos >= self.n:
             return Token(TokenType.EOF, "", self.line, self.col)
 
-        # 1) 字符串/字符
+        # 字符串/字符
         sc = self._try_string_or_char()
         if sc is not None:
             return sc
 
-        # 2) 试所有候选（按最长匹配；同长按优先级）
+        # 试所有候选（最长匹配）
         candidates = []
 
-        # 数字：优先尝试浮点（避免把 "1." 拆成 1 和 "."）
+        # 数字
         start = self.pos
         Lf = match_float(self.text, start)
         if Lf > 0:
@@ -141,7 +142,7 @@ class Lexer:
         if L10 > 0:
             candidates.append((L10, TokenType.NUM10))
 
-        # 运算符/界符（Trie 最长匹配）
+        # 运算符/界符（Trie最长匹配）
         op_lex, op_tag = self.trie.match_longest(self.text, start)
         if op_lex is not None:
             ttype = TokenType.OP if op_tag == "OP" else TokenType.DL
@@ -150,7 +151,6 @@ class Lexer:
         # 标识符/关键字
         Lid = match_identifier(self.text, start)
         if Lid > 0:
-            # 暂时先当作 ID，真正确定类型时再看关键字集合
             candidates.append((Lid, None))
 
         if not candidates:
@@ -167,13 +167,13 @@ class Lexer:
             elif tt in (TokenType.OP, TokenType.DL):
                 p = 2
             else:
-                p = 1  # ID/RW
+                p = 1 
             return (l, p)
 
         L, ttype = max(candidates, key=pri)
         lex = self.text[self.pos:self.pos+L]
 
-        # 若是 ID/RW，二次判定关键字
+        # 若是 ID/RW，判定关键字
         if ttype is None:
             ttype = TokenType.RW if lex in KEYWORDS else TokenType.ID
 
