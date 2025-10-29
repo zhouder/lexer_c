@@ -27,9 +27,11 @@ def match_while(text: str, pos: int, pred) -> int:
         i += 1
     return i - pos
 
+# 跳过空白符
 def match_whitespace(text: str, pos: int) -> int:
     return match_while(text, pos, lambda ch: ch in WHITESPACE)
 
+# 匹配标识符
 def match_identifier(text: str, pos: int) -> int:
     n = len(text)
     if pos >= n or not is_id_start(text[pos]):
@@ -39,60 +41,37 @@ def match_identifier(text: str, pos: int) -> int:
         i += 1
     return i - pos
 
-def _match_exponent(text: str, pos: int) -> int:
-    # [eE][+-]?[0-9]+
-    n = len(text)
-    i = pos
-    if i < n and text[i] in ('e', 'E'):
-        i += 1
-        if i < n and text[i] in ('+', '-'):
-            i += 1
-        start_digits = i
-        i += match_while(text, i, is_digit)
-        if i > start_digits:
-            return i - pos
-    return 0
-
+# 匹配浮点数（十进制）
 def match_float(text: str, pos: int) -> int:
-    """
-    支持三种形式（十进制）：
-      1) digits '.' digits* [exp]      如 1.  1.0  1.0e+2
-      2) '.' digits+ [exp]             如 .5  .5e3
-      3) digits [exp]                  如 1e10
-    返回匹配长度，失败则 0。
-    """
     n = len(text)
     i = pos
-    if i >= n:
+
+    if i >= n or not is_digit(text[i]):
         return 0
-    best = 0
 
-    # 1) digits '.' digits* [exp]
-    j = i
-    j += match_while(text, j, is_digit)
-    if j > i and j < n and text[j] == '.':
-        k = j + 1
-        k += match_while(text, k, is_digit)
-        k += _match_exponent(text, k)
-        best = max(best, k - i)
+    i += match_while(text, i, is_digit)
 
-    # 2) '.' digits+ [exp]
-    if text[i] == '.' and i + 1 < n and is_digit(text[i+1]):
-        j = i + 1 + match_while(text, i + 1, is_digit)
-        j += _match_exponent(text, j)
-        best = max(best, j - i)
+    if i >= n or text[i] != '.':
+        return 0
+    i += 1
 
-    # 3) digits [exp]
-    j = i + match_while(text, i, is_digit)
-    if j > i:
-        k = j + _match_exponent(text, j)
-        if k > j:  # 必须有 exponent 才算 float
-            best = max(best, k - i)
+    if i >= n or not is_digit(text[i]):
+        return 0
+    i += match_while(text, i, is_digit)
 
-    return best
+    if i < n and text[i] in ('e', 'E'):
+        j = i + 1
+        if j < n and text[j] in ('+', '-'):
+            j += 1
+        k = j + match_while(text, j, is_digit)
+        if k == j:
+            return 0  
+        i = k
 
+    return i - pos
+
+# 匹配16进制
 def match_hex_int(text: str, pos: int) -> int:
-    # 0[xX][0-9a-fA-F]+
     n = len(text)
     if pos + 2 <= n and pos < n and text[pos] == '0' and pos + 1 < n and text[pos+1] in ('x','X'):
         j = pos + 2
@@ -102,8 +81,8 @@ def match_hex_int(text: str, pos: int) -> int:
             return j - pos
     return 0
 
+# 匹配8进制
 def match_oct_int(text: str, pos: int) -> int:
-    # 0[0-7]+  （注意：单独的 "0" 不算八进制，归十进制）
     n = len(text)
     if pos < n and text[pos] == '0':
         j = pos + 1
@@ -112,8 +91,8 @@ def match_oct_int(text: str, pos: int) -> int:
             return j - pos
     return 0
 
+# 匹配10进制
 def match_dec_int(text: str, pos: int) -> int:
-    # 0 | [1-9][0-9]*
     n = len(text)
     if pos >= n or not is_digit(text[pos]):
         return 0
@@ -123,13 +102,8 @@ def match_dec_int(text: str, pos: int) -> int:
     j += match_while(text, j, is_digit)
     return j - pos
 
+# 匹配字符或字符串
 def match_string_or_char(text: str, pos: int) -> Tuple[int, bool, bool]:
-    """
-    返回 (len, is_string, is_error)
-      - is_string=True 表示字符串，否则为字符常量
-      - is_error=True 表示未闭合错误
-    允许转义，不允许字符串跨行（C89）。
-    """
     n = len(text)
     if pos >= n or text[pos] not in ("'", '"'):
         return (0, False, False)
@@ -137,8 +111,9 @@ def match_string_or_char(text: str, pos: int) -> Tuple[int, bool, bool]:
     i = pos + 1
     while i < n:
         c = text[i]
+        # 跳过转义
         if c == '\\':
-            i += 2  # 跳过转义对
+            i += 2  
             continue
         if c == quote:
             return (i - pos + 1, quote == '"', False)
@@ -146,39 +121,36 @@ def match_string_or_char(text: str, pos: int) -> Tuple[int, bool, bool]:
             break
         i += 1
     # 未闭合
-    # 至少消费开引号，避免死循环
     return (max(1, i - pos), quote == '"', True)
 
-class TrieNode:
-    __slots__ = ("children", "tag")
-    def __init__(self):
-        self.children = {}
-        self.tag = None  # e.g. "OP" / "DL"
-
+# 运算符/界符的最长匹配
 class Trie:
     def __init__(self):
-        self.root = TrieNode()
+        self.root = {"next": {}}
 
     def add(self, s: str, tag: str):
         node = self.root
         for ch in s:
-            node = node.children.setdefault(ch, TrieNode())
-        node.tag = tag
+            node = node["next"].setdefault(ch, {"next": {}})
+        node["end"] = True
+        node["tag"] = tag
 
-    def match_longest(self, text: str, pos: int) -> Tuple[Optional[str], Optional[str]]:
+    def match_longest(self, text: str, pos: int):
         node = self.root
         i, n = pos, len(text)
-        last_tag = None
-        last_i = pos
+        last_hit = None 
+
         while i < n:
             ch = text[i]
-            if ch not in node.children:
+            nxt = node["next"].get(ch)
+            if nxt is None:
                 break
-            node = node.children[ch]
+            node = nxt
             i += 1
-            if node.tag is not None:
-                last_tag = node.tag
-                last_i = i
-        if last_tag is None:
+            if node.get("end"):
+                last_hit = (i, node.get("tag"))
+
+        if last_hit is None:
             return (None, None)
-        return (text[pos:last_i], last_tag)
+        end_i, tag = last_hit
+        return (text[pos:end_i], tag)
