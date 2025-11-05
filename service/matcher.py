@@ -65,7 +65,7 @@ def match_float(text: str, pos: int) -> int:
             j += 1
         k = j + match_while(text, j, is_digit)
         if k == j:
-            return 0  
+            return 0
         i = k
 
     return i - pos
@@ -102,28 +102,56 @@ def match_dec_int(text: str, pos: int) -> int:
     j += match_while(text, j, is_digit)
     return j - pos
 
-# 匹配字符或字符串
-def match_string_or_char(text: str, pos: int) -> Tuple[int, bool, bool]:
+# 字符串或字符常量（支持转义，字符串不跨行；返回 (length, is_string, is_error)）
+def match_string_or_char(text: str, pos: int):
     n = len(text)
     if pos >= n or text[pos] not in ("'", '"'):
         return (0, False, False)
+
     quote = text[pos]
     i = pos + 1
     while i < n:
         c = text[i]
-        # 跳过转义
-        if c == '\\':
-            i += 2  
+        if c == "\\":           # 跳过转义对，例如 \" \n \t \\
+            i += 2
             continue
-        if c == quote:
+        if c == quote:            # 成功闭合
             return (i - pos + 1, quote == '"', False)
-        if c == '\n' and quote == '"':
+        if c == "\n" and quote == '"':  # C89 字符串不跨行
             break
         i += 1
-    # 未闭合
+
+    # 未闭合：至少消费开引号，避免死循环
     return (max(1, i - pos), quote == '"', True)
 
-# 运算符/界符的最长匹配
+# —— 新增：base36 裸写形状 —— 
+def is_base36(c: str) -> bool:
+    return ('0' <= c <= '9') or ('a' <= c <= 'z') or ('A' <= c <= 'Z')
+
+def match_base36_bare(text: str, pos: int) -> int:
+    """
+    裸写 36 进制形态：[A-Za-z0-9]+ 且 “至少 1 字母 + 至少 1 数字”。
+    这里只做形状识别；是否采用由 lexer 的上下文来决定。
+    """
+    n = len(text)
+    i = pos
+    if i >= n or not is_base36(text[i]):
+        return 0
+    has_alpha = False
+    has_digit = False
+    while i < n and is_base36(text[i]):
+        ch = text[i]
+        if '0' <= ch <= '9':
+            has_digit = True
+        else:
+            has_alpha = True
+        i += 1
+    if has_alpha and has_digit:
+        return i - pos
+    return 0
+# —— 新增结束 —— 
+
+# 运算符/界符的最长匹配（使用嵌套 dict 实现的简单 Trie）
 class Trie:
     def __init__(self):
         self.root = {"next": {}}
@@ -138,7 +166,7 @@ class Trie:
     def match_longest(self, text: str, pos: int):
         node = self.root
         i, n = pos, len(text)
-        last_hit = None 
+        last_hit = None
 
         while i < n:
             ch = text[i]

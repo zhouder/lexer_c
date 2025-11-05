@@ -16,6 +16,7 @@ class TokenType(Enum):
     CM = auto()        # 注释（不输出）
     ERROR = auto()     # 词法错误
     EOF = auto()       # 文件结束
+    NUM36=auto()
 
 TYPE_CN = {
     TokenType.RW: "关键字",
@@ -30,6 +31,7 @@ TYPE_CN = {
     TokenType.DL: "界符",
     TokenType.CM: "注释",
     TokenType.ERROR: "错误",
+    TokenType.NUM36: "三十六进制数",
 }
 
 @dataclass
@@ -44,7 +46,7 @@ KEYWORDS = {
     "auto","double","int","struct","break","else","long","switch","case","enum",
     "register","typedef","char","extern","return","union","const","float","short",
     "unsigned","continue","for","signed","void","default","goto","sizeof","volatile",
-    "do","if","static","while"
+    "do","if","static","while","int36"
 }
 
 # 运算符（按长度降序确保最长匹配）
