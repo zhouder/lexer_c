@@ -3,7 +3,7 @@ from .token import KEYWORDS, OPERATORS, DELIMITERS
 from .matcher import (
     match_whitespace, match_identifier,
     match_float, match_hex_int, match_oct_int, match_dec_int,
-    match_string_or_char, Trie
+    match_string_or_char, Trie, is_id_continue
 )
 
 class Lexer:
@@ -20,7 +20,7 @@ class Lexer:
         for dl in DELIMITERS:
             self.trie.add(dl, "DL")
 
-    #推进
+    # 推进
     def _advance(self, s: str):
         for ch in s:
             if ch == "\n":
@@ -34,7 +34,6 @@ class Lexer:
     def _peek(self, k=1) -> str:
         return self.text[self.pos:self.pos+k]
     
-
     # 预处理
     def _skip_ws(self) -> bool:
         n = match_whitespace(self.text, self.pos)
@@ -172,6 +171,50 @@ class Lexer:
 
         L, ttype = max(candidates, key=pri)
         lex = self.text[self.pos:self.pos+L]
+
+        # 以 0 开头的专门判定
+        if ttype == TokenType.NUM10 and lex == '0':
+            j = self.pos + 1
+            if j < self.n and self.text[j] in ('x', 'X'):
+                L16_try = match_hex_int(self.text, self.pos)
+                if L16_try > 0:
+                    L = L16_try
+                    ttype = TokenType.NUM16
+                    lex = self.text[self.pos:self.pos+L]
+                else:
+                    k = j + 1
+                    while k < self.n and is_id_continue(self.text[k]):
+                        k += 1
+                    bad_lex = self.text[self.pos:k] if k > j + 1 else self.text[self.pos:j+1]
+                    tok = Token(TokenType.ERROR, bad_lex, self.line, self.col)
+                    self._advance(bad_lex)
+                    return tok
+            elif j < self.n and self.text[j] in '01234567':
+                L8_try = match_oct_int(self.text, self.pos)
+                if L8_try > 0:
+                    L = L8_try
+                    ttype = TokenType.NUM8
+                    lex = self.text[self.pos:self.pos+L]
+            elif j < self.n and self.text[j] in '89':
+                k = j + 1
+                while k < self.n and is_id_continue(self.text[k]):
+                    k += 1
+                bad_lex = self.text[self.pos:k]
+                tok = Token(TokenType.ERROR, bad_lex, self.line, self.col)
+                self._advance(bad_lex)
+                return tok
+
+        # 合法数字后后缀检查（012t、0x5BT、123abc ）
+        if ttype in (TokenType.FLOAT, TokenType.NUM16, TokenType.NUM8, TokenType.NUM10):
+            j = self.pos + L
+            if j < self.n and is_id_continue(self.text[j]):
+                k = j
+                while k < self.n and is_id_continue(self.text[k]):
+                    k += 1
+                bad_lex = self.text[self.pos:k]
+                tok = Token(TokenType.ERROR, bad_lex, self.line, self.col)
+                self._advance(bad_lex)
+                return tok
 
         # 若是 ID/RW，判定关键字
         if ttype is None:

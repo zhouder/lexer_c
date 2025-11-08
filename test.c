@@ -14,7 +14,7 @@ int main()
     printf("制表符: %c\n", tab_char);
 
     int a = 10;
-    int b = 012;
+    int b = 012t;
     int c = 0x5B;
     float pi = 3.14;
 
@@ -27,3 +27,4 @@ int main()
         return 1;
     }
 }
+/*

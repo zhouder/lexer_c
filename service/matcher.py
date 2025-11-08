@@ -73,12 +73,13 @@ def match_float(text: str, pos: int) -> int:
 # 匹配16进制
 def match_hex_int(text: str, pos: int) -> int:
     n = len(text)
-    if pos + 2 <= n and pos < n and text[pos] == '0' and pos + 1 < n and text[pos+1] in ('x','X'):
+    if pos + 1 < n and text[pos] == '0' and text[pos + 1] in ('x', 'X'):
         j = pos + 2
-        start = j
-        j += match_while(text, j, is_hex)
-        if j > start:
+        if j < n and is_hex(text[j]):
+            while j < n and is_hex(text[j]):
+                j += 1
             return j - pos
+        return 0
     return 0
 
 # 匹配8进制
@@ -88,6 +89,8 @@ def match_oct_int(text: str, pos: int) -> int:
         j = pos + 1
         if j < n and is_oct(text[j]):
             j += match_while(text, j, is_oct)
+            if j < n and not is_oct(text[j]):
+                return 0
             return j - pos
     return 0
 
