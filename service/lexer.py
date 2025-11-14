@@ -109,8 +109,8 @@ class Lexer:
                 progressed = True
             elif isinstance(cm, Token): 
                 return cm
-            if self._skip_pp_line():
-                progressed = True
+            # if self._skip_pp_line():
+            #     progressed = True
 
         if self.pos >= self.n:
             return Token(TokenType.EOF, "", self.line, self.col)
@@ -119,6 +119,12 @@ class Lexer:
         sc = self._try_string_or_char()
         if sc is not None:
             return sc
+        
+        # 预处理指令处理：例如 #include <stdio.h>
+        if self._peek(1) == '#':
+            tok = Token(TokenType.DL, '#', self.line, self.col)
+            self._advance('#')
+            return tok
 
         # 试所有候选（最长匹配）
         candidates = []
