@@ -88,9 +88,8 @@ def match_oct_int(text: str, pos: int) -> int:
     if pos < n and text[pos] == '0':
         j = pos + 1
         if j < n and is_oct(text[j]):
-            j += match_while(text, j, is_oct)
-            if j < n and not is_oct(text[j]):
-                return 0
+            while j < n and is_oct(text[j]):
+                j += 1
             return j - pos
     return 0
 

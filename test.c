@@ -1,30 +1,14 @@
 #include <stdio.h>
 
-int main()
-{
-    /* 这是一个注释 */
-    char greeting[] = "Hello, C compiler!\n";
-    char single_quote_char = '\'';
-    char backslash_char = '\\';
-    char tab_char = '\t';
-
-    printf("%s", greeting);
-    printf("单引号字符: %c\n", single_quote_char);
-    printf("反斜杠字符: %c\n", backslash_char);
-    printf("制表符: %c\n", tab_char);
-
-    int a = 10;
-    int b = 012t;
-    int c = 0x5B;
-    float pi = 3.14;
-
-    if (a > 5)
-    {
-        return 0;
-    }
-    else
-    {
-        return 1;
-    }
+union Data{
+    int intValue;
+    char charValue[2];
+};
+void main(){
+    union Data data;
+    data.intValue=0x1234;//十六进制数
+    data.charValue[0]=0101;//八进制
+    data.charValue[1]=97;
+    if(data.intValue%2==0)printf("%c",data.charValue[0]);
+    else printf("%c",data.charValue[1]);
 }
-/*
